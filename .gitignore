@@ -9,5 +9,4 @@ __pycache__/
 *.pyc
 *.pyo
 *.pyd
-
 .gitlab-ci.yml
