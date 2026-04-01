@@ -1,0 +1,13 @@
+.env
+notebook.ipynb
+nyc_data
+mcp_server.py
+evalution/
+.venv/
+__pycache__/
+**/__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+.gitlab-ci.yml

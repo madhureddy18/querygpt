@@ -1,0 +1,19 @@
+User
+ ↓
+Streamlit (UI)
+ ↓
+FastAPI (Backend API)
+ ↓
+Intent Agent
+ ↓
+RAG (Vector DB)
+ ↓
+Table Agent
+ ↓
+Column Pruner
+ ↓
+SQL Generator
+ ↓
+PostgreSQL
+ ↓
+Explanation Agent

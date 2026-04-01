@@ -1,0 +1,15 @@
+image: docker:latest
+
+services:
+  - docker:dind
+
+variables:
+  DOCKER_TLS_CERTDIR: ""
+
+stages:
+  - build
+
+build:
+  stage: build
+  script:
+    - docker build -t querygpt-api .

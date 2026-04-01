@@ -1,0 +1,142 @@
+[
+  {
+    "id": 21,
+    "question": "Find the top 5 pickup zones where the ratio of night trips (10PM-5AM) to total trips is highest in September 2025.",
+    "golden_sql": "SELECT z.zone, COUNT(*) FILTER (WHERE f.pickup_hour >= 22 OR f.pickup_hour <= 5) * 1.0 / COUNT(*) AS night_ratio FROM analytics.fact_taxi_trips_2025_09 f JOIN analytics.taxi_zones z ON f.pulocationid = z.locationid GROUP BY z.zone HAVING COUNT(*) > 100 ORDER BY night_ratio DESC LIMIT 5;",
+    "domain": "time",
+    "difficulty": "complex"
+  },
+  {
+    "id": 22,
+    "question": "Identify zones where the median trip distance is greater than the 75th percentile of overall trip distance.",
+    "golden_sql": "WITH overall AS (SELECT PERCENTILE_CONT(0.75) WITHIN GROUP (ORDER BY trip_distance) AS p75 FROM analytics.fact_taxi_trips_2025_09) SELECT z.zone, PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY f.trip_distance) AS median_distance FROM analytics.fact_taxi_trips_2025_09 f JOIN analytics.taxi_zones z ON f.pulocationid = z.locationid CROSS JOIN overall GROUP BY z.zone, overall.p75 HAVING PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY f.trip_distance) > overall.p75 ORDER BY median_distance DESC;",
+    "domain": "trips",
+    "difficulty": "complex"
+  },
+  {
+    "id": 23,
+    "question": "Find the top 3 drivers (hvfhs_license_num) with the highest variance in driver pay per trip.",
+    "golden_sql": "SELECT hvfhs_license_num, VARIANCE(driver_pay) AS pay_variance FROM raw.fhvhv_tripdata_2025_09 GROUP BY hvfhs_license_num HAVING COUNT(*) > 50 ORDER BY pay_variance DESC LIMIT 3;",
+    "domain": "revenue",
+    "difficulty": "complex"
+  },
+  {
+    "id": 24,
+    "question": "Which pickup zones have more dropoffs outside their own borough than inside?",
+    "golden_sql": "SELECT pz.zone FROM analytics.fact_taxi_trips_2025_09 f JOIN analytics.taxi_zones pz ON f.pulocationid = pz.locationid JOIN analytics.taxi_zones dz ON f.dolocationid = dz.locationid GROUP BY pz.zone HAVING COUNT(*) FILTER (WHERE pz.borough != dz.borough) > COUNT(*) FILTER (WHERE pz.borough = dz.borough);",
+    "domain": "zones",
+    "difficulty": "hard"
+  },
+  {
+    "id": 25,
+    "question": "Calculate the percentage contribution of each borough to total revenue and rank them.",
+    "golden_sql": "WITH total AS (SELECT SUM(total_amount) AS total_revenue FROM analytics.fact_taxi_trips_2025_09) SELECT z.borough, SUM(f.total_amount) AS borough_revenue, ROUND(SUM(f.total_amount) * 100.0 / total.total_revenue, 2) AS pct_contribution, RANK() OVER (ORDER BY SUM(f.total_amount) DESC) AS rank FROM analytics.fact_taxi_trips_2025_09 f JOIN analytics.taxi_zones z ON f.pulocationid = z.locationid CROSS JOIN total GROUP BY z.borough, total.total_revenue;",
+    "domain": "revenue",
+    "difficulty": "hard"
+  },
+  {
+    "id": 26,
+    "question": "Find zones where average trip duration is significantly higher than the city average (more than 2 standard deviations).",
+    "golden_sql": "WITH stats AS (SELECT AVG(trip_duration) AS avg_dur, STDDEV(trip_duration) AS std_dur FROM analytics.fact_taxi_trips_2025_09) SELECT z.zone, AVG(f.trip_duration) AS avg_zone_duration FROM analytics.fact_taxi_trips_2025_09 f JOIN analytics.taxi_zones z ON f.pulocationid = z.locationid CROSS JOIN stats GROUP BY z.zone, stats.avg_dur, stats.std_dur HAVING AVG(f.trip_duration) > stats.avg_dur + 2 * stats.std_dur;",
+    "domain": "trips",
+    "difficulty": "complex"
+  },
+  {
+    "id": 27,
+    "question": "Find the longest streak of consecutive days where total trips increased day-over-day.",
+    "golden_sql": "WITH daily AS (SELECT pickup_datetime::date AS d, COUNT(*) AS trips FROM analytics.fact_taxi_trips_2025_09 GROUP BY d), diff AS (SELECT d, trips, trips - LAG(trips) OVER (ORDER BY d) AS diff FROM daily), grp AS (SELECT d, trips, SUM(CASE WHEN diff <= 0 THEN 1 ELSE 0 END) OVER (ORDER BY d) AS grp_id FROM diff) SELECT grp_id, COUNT(*) AS streak_length FROM grp WHERE diff > 0 GROUP BY grp_id ORDER BY streak_length DESC LIMIT 1;",
+    "domain": "time",
+    "difficulty": "complex"
+  },
+  {
+    "id": 28,
+    "question": "Find zones where the average fare per mile is below the city average but total trips are above average.",
+    "golden_sql": "WITH city AS (SELECT AVG(total_amount / NULLIF(trip_distance,0)) AS avg_fpm, AVG(cnt) AS avg_trips FROM (SELECT pulocationid, COUNT(*) AS cnt FROM analytics.fact_taxi_trips_2025_09 GROUP BY pulocationid) t) SELECT z.zone FROM analytics.fact_taxi_trips_2025_09 f JOIN analytics.taxi_zones z ON f.pulocationid = z.locationid CROSS JOIN city GROUP BY z.zone, city.avg_fpm, city.avg_trips HAVING AVG(f.total_amount / NULLIF(f.trip_distance,0)) < city.avg_fpm AND COUNT(*) > city.avg_trips;",
+    "domain": "revenue",
+    "difficulty": "complex"
+  },
+  {
+    "id": 29,
+    "question": "Find the top 5 hours where surge pricing (total_amount > 2 * base_passenger_fare) is most frequent.",
+    "golden_sql": "SELECT pickup_hour, COUNT(*) AS surge_trips FROM raw.fhvhv_tripdata_2025_09 WHERE total_amount > 2 * base_passenger_fare GROUP BY pickup_hour ORDER BY surge_trips DESC LIMIT 5;",
+    "domain": "revenue",
+    "difficulty": "medium"
+  },
+  {
+    "id": 30,
+    "question": "Which borough has the most balanced distribution of trips across all hours (lowest variance)?",
+    "golden_sql": "WITH hourly AS (SELECT z.borough, f.pickup_hour, COUNT(*) AS trips FROM analytics.fact_taxi_trips_2025_09 f JOIN analytics.taxi_zones z ON f.pulocationid = z.locationid GROUP BY z.borough, f.pickup_hour) SELECT borough, VARIANCE(trips) AS var_trips FROM hourly GROUP BY borough ORDER BY var_trips ASC LIMIT 1;",
+    "domain": "time",
+    "difficulty": "complex"
+  },
+  {
+    "id": 31,
+    "question": "Find zones that never appear as dropoff locations in September 2025.",
+    "golden_sql": "SELECT z.zone FROM analytics.taxi_zones z LEFT JOIN analytics.fact_taxi_trips_2025_09 f ON z.locationid = f.dolocationid WHERE f.dolocationid IS NULL;",
+    "domain": "zones",
+    "difficulty": "medium"
+  },
+  {
+    "id": 32,
+    "question": "Find the percentage of trips where pickup and dropoff zones are the same.",
+    "golden_sql": "SELECT ROUND(COUNT(*) FILTER (WHERE pulocationid = dolocationid) * 100.0 / COUNT(*), 2) AS same_zone_pct FROM analytics.fact_taxi_trips_2025_09;",
+    "domain": "trips",
+    "difficulty": "medium"
+  },
+  {
+    "id": 33,
+    "question": "Find the top 5 pickup zones contributing to 50% of total trips cumulatively.",
+    "golden_sql": "WITH zone_counts AS (SELECT z.zone, COUNT(*) AS trips FROM analytics.fact_taxi_trips_2025_09 f JOIN analytics.taxi_zones z ON f.pulocationid = z.locationid GROUP BY z.zone), ranked AS (SELECT zone, trips, SUM(trips) OVER (ORDER BY trips DESC) AS cum_trips, SUM(trips) OVER () AS total_trips FROM zone_counts) SELECT zone FROM ranked WHERE cum_trips <= 0.5 * total_trips ORDER BY trips DESC LIMIT 5;",
+    "domain": "trips",
+    "difficulty": "complex"
+  },
+  {
+    "id": 34,
+    "question": "Find the average waiting time between consecutive trips for each driver.",
+    "golden_sql": "SELECT hvfhs_license_num, AVG(pickup_datetime - LAG(dropoff_datetime) OVER (PARTITION BY hvfhs_license_num ORDER BY pickup_datetime)) AS avg_wait_time FROM raw.fhvhv_tripdata_2025_09 GROUP BY hvfhs_license_num;",
+    "domain": "time",
+    "difficulty": "complex"
+  },
+  {
+    "id": 35,
+    "question": "Find zones with the highest ratio of toll_amount to total_amount.",
+    "golden_sql": "SELECT z.zone, AVG(f.tolls_amount / NULLIF(f.total_amount,0)) AS toll_ratio FROM analytics.fact_taxi_trips_2025_09 f JOIN analytics.taxi_zones z ON f.pulocationid = z.locationid GROUP BY z.zone ORDER BY toll_ratio DESC LIMIT 5;",
+    "domain": "revenue",
+    "difficulty": "medium"
+  },
+  {
+    "id": 36,
+    "question": "Find the hour with the highest cancellation rate (trips with zero distance).",
+    "golden_sql": "SELECT pickup_hour, COUNT(*) FILTER (WHERE trip_distance = 0) * 1.0 / COUNT(*) AS cancel_rate FROM analytics.fact_taxi_trips_2025_09 GROUP BY pickup_hour ORDER BY cancel_rate DESC LIMIT 1;",
+    "domain": "time",
+    "difficulty": "medium"
+  },
+  {
+    "id": 37,
+    "question": "Find zones where average tip percentage increased compared to August.",
+    "golden_sql": "WITH aug AS (SELECT pulocationid, AVG(tip_amount / NULLIF(total_amount,0)) AS tip_pct FROM analytics.fact_taxi_trips_2025_08 GROUP BY pulocationid), sep AS (SELECT pulocationid, AVG(tip_amount / NULLIF(total_amount,0)) AS tip_pct FROM analytics.fact_taxi_trips_2025_09 GROUP BY pulocationid) SELECT z.zone FROM aug a JOIN sep s ON a.pulocationid = s.pulocationid JOIN analytics.taxi_zones z ON z.locationid = a.pulocationid WHERE s.tip_pct > a.tip_pct;",
+    "domain": "revenue",
+    "difficulty": "hard"
+  },
+  {
+    "id": 38,
+    "question": "Find the most common trip distance bucket (rounded to nearest mile).",
+    "golden_sql": "SELECT ROUND(trip_distance) AS distance_bucket, COUNT(*) AS trips FROM analytics.fact_taxi_trips_2025_09 GROUP BY distance_bucket ORDER BY trips DESC LIMIT 1;",
+    "domain": "trips",
+    "difficulty": "easy"
+  },
+  {
+    "id": 39,
+    "question": "Find drivers whose average earnings per trip are in the top 10 percentile.",
+    "golden_sql": "WITH driver_avg AS (SELECT hvfhs_license_num, AVG(driver_pay) AS avg_pay FROM raw.fhvhv_tripdata_2025_09 GROUP BY hvfhs_license_num), cutoff AS (SELECT PERCENTILE_CONT(0.9) WITHIN GROUP (ORDER BY avg_pay) AS p90 FROM driver_avg) SELECT d.* FROM driver_avg d, cutoff c WHERE d.avg_pay >= c.p90;",
+    "domain": "revenue",
+    "difficulty": "complex"
+  },
+  {
+    "id": 40,
+    "question": "Find zones where trips are highly concentrated in a single hour (max hourly trips > 50% of total zone trips).",
+    "golden_sql": "WITH hourly AS (SELECT pulocationid, pickup_hour, COUNT(*) AS trips FROM analytics.fact_taxi_trips_2025_09 GROUP BY pulocationid, pickup_hour), totals AS (SELECT pulocationid, SUM(trips) AS total_trips FROM hourly GROUP BY pulocationid), max_hour AS (SELECT pulocationid, MAX(trips) AS max_trips FROM hourly GROUP BY pulocationid) SELECT z.zone FROM totals t JOIN max_hour m ON t.pulocationid = m.pulocationid JOIN analytics.taxi_zones z ON z.locationid = t.pulocationid WHERE m.max_trips > 0.5 * t.total_trips;",
+    "domain": "time",
+    "difficulty": "complex"
+  }
+]
