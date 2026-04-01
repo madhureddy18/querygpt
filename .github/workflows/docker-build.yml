@@ -40,7 +40,7 @@ jobs:
       # 5. Tag image
       - name: Tag Image
         run: |
-          docker tag querygpt-api:latest \
+          docker tag sqlgpt-api:latest \
           $AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/sqlgpt-api:latest
 
       # 6. Push image
