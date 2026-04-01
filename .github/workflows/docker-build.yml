@@ -32,16 +32,16 @@ jobs:
       # 4. Build image
       - name: Build Docker Image
         run: |
-          docker build -t querygpt-api .
+          docker build -t sqlgpt-api .
 
       # 5. Tag image
       - name: Tag Image
         run: |
           docker tag querygpt-api:latest \
-          $AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/querygpt-api:latest
+          566057504384.dkr.ecr.ap-south-2.amazonaws.com/sqlgpt-api:latest
 
       # 6. Push image
       - name: Push to ECR
         run: |
           docker push \
-          $AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/querygpt-api:latest
+          566057504384.dkr.ecr.ap-south-2.amazonaws.com/sqlgpt-api:latest
