@@ -4,7 +4,7 @@ metadata:
   name: sqlgpt-api
 spec: 
   replicas: 2
-  selectors:
+  selector:
     matchLabels:
       app: sqlgpt-api
   template:
