@@ -1,0 +1,11 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: sqlgpt-ui-service
+spec:
+  type: LoadBalancer
+  selector:
+    app: sqlgpt-ui
+  ports:
+    - port: 80
+      targetPort: 8501

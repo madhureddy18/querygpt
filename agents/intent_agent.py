@@ -141,62 +141,61 @@ def classify_intent_hybrid(question: str, db_config: dict) -> str:
               f"Embed={embed_domain} | trusting LLM")
         return llm_domain
 
+# # ── test ──────────────────────────────────────────────────────
+# if __name__ == "__main__":
 
-# ── test ──────────────────────────────────────────────────────
-if __name__ == "__main__":
+#     questions = [
+#         "How many total trips were completed in September 2025?",
+#         "What is the average trip distance across all cab types?",
+#         "Which pickup zones had the most rides last week?",
+#         "Show me the top 5 drop off boroughs by trip count",
+#         "What is the average tip amount for yellow cabs?",
+#         "Which payment method is used most — cash or card?",
+#         "Compare total trips between yellow and green cabs",
+#         "How many Uber and Lyft trips happened in September?",
+#         "Which hour of the day has the highest trip volume?",
+#         "What day of the week sees the most pickups?",
+#         "Which zones generated the highest revenue last month?",
+#         "At what time do we see the highest revenue from trips?",
+#         "Which borough has the most trips and highest earnings?",
+#         "Compare trip count and total revenue between weekdays and weekends",
+#         "Which pickup locations have both high trip volume and high tips?",
+#         "Where are people traveling the most from?",
+#         "When is the system most busy?",
+#         "Which areas perform best financially?",
+#         "How do rides behave during peak hours?",
+#         "Which part of the city is most active?",
+#         "Show top performing segments",
+#         "Give me the best areas",
+#         "What trends do you see in the data?",
+#         "Which category dominates?",
+#         "Show important patterns",
+#         "Do longer trips generate more money?",
+#         "Is there a relationship between distance and fare?",
+#         "Are tips higher in certain locations?",
+#         "Do people travel more at night or day?",
+#         "Which service type performs better overall?",
+#         "top zones??",
+#         "rides count yesterday",
+#         "money per trip area wise",
+#         "which time most rides happening",
+#         "uber vs lyft which more trips bro",
+#         "avg earning per ride?",
+#         "where max pickups??",
+#         "day wise trip stats",
+#         "Which zone has highest trips at night and also highest revenue?",
+#         "Compare revenue but only for busiest locations",
+#         "Find areas where trips are low but earnings are high",
+#         "Which day has low trips but high average fare?",
+#         "Top 3 zones by revenue during peak hours"
+#     ]
 
-    questions = [
-        "How many total trips were completed in September 2025?",
-        "What is the average trip distance across all cab types?",
-        "Which pickup zones had the most rides last week?",
-        "Show me the top 5 drop off boroughs by trip count",
-        "What is the average tip amount for yellow cabs?",
-        "Which payment method is used most — cash or card?",
-        "Compare total trips between yellow and green cabs",
-        "How many Uber and Lyft trips happened in September?",
-        "Which hour of the day has the highest trip volume?",
-        "What day of the week sees the most pickups?",
-        "Which zones generated the highest revenue last month?",
-        "At what time do we see the highest revenue from trips?",
-        "Which borough has the most trips and highest earnings?",
-        "Compare trip count and total revenue between weekdays and weekends",
-        "Which pickup locations have both high trip volume and high tips?",
-        "Where are people traveling the most from?",
-        "When is the system most busy?",
-        "Which areas perform best financially?",
-        "How do rides behave during peak hours?",
-        "Which part of the city is most active?",
-        "Show top performing segments",
-        "Give me the best areas",
-        "What trends do you see in the data?",
-        "Which category dominates?",
-        "Show important patterns",
-        "Do longer trips generate more money?",
-        "Is there a relationship between distance and fare?",
-        "Are tips higher in certain locations?",
-        "Do people travel more at night or day?",
-        "Which service type performs better overall?",
-        "top zones??",
-        "rides count yesterday",
-        "money per trip area wise",
-        "which time most rides happening",
-        "uber vs lyft which more trips bro",
-        "avg earning per ride?",
-        "where max pickups??",
-        "day wise trip stats",
-        "Which zone has highest trips at night and also highest revenue?",
-        "Compare revenue but only for busiest locations",
-        "Find areas where trips are low but earnings are high",
-        "Which day has low trips but high average fare?",
-        "Top 3 zones by revenue during peak hours"
-    ]
-
-    for q in questions:
-        llm_domain             = classify_intent(q)
-        embed_domain, conf     = classify_intent_by_embedding(q,db_config)
-        final_domain           = classify_intent_hybrid(q,db_config)
-        print(f"Q: {q}")
-        print(f"  LLM    → {llm_domain}")
-        print(f"  Embed  → {embed_domain} (confidence: {conf})")
-        print(f"  Final  → {final_domain}")
-        print()
+#     for q in questions:
+#         llm_domain             = classify_intent(q)
+#         embed_domain, conf     = classify_intent_by_embedding(q,db_config)
+#         final_domain           = classify_intent_hybrid(q,db_config)
+#         print(f"Q: {q}")
+#         print(f"  LLM    → {llm_domain}")
+#         print(f"  Embed  → {embed_domain} (confidence: {conf})")
+#         print(f"  Final  → {final_domain}")
+#         print()

@@ -9,3 +9,5 @@ __pycache__/
 *.pyc
 *.pyo
 *.pyd
+requirements.txt
+k8s/secrets.yaml

@@ -1,20 +1,7 @@
 # app.py
 
 import streamlit as st
-import psycopg2
-from dotenv import load_dotenv
-import os
-
-from databases.workspace_manager import (
-    get_all_workspaces,
-    get_workspace_by_name,
-    create_custom_workspace,
-    delete_workspace,
-    get_db_config
-)
-from pipeline import run_pipeline
-
-load_dotenv(override=True)
+import api_client
 
 # ── Page config ───────────────────────────────────────────────
 st.set_page_config(
@@ -184,6 +171,8 @@ def init():
         "show_create_form":   False,
         "selected_workspace": None,
         "question":           "",
+        "enhanced_question":  "",
+        "intent":             "",
         "suggested_tables":   [],
         "pipeline_result":    None,
     }
@@ -231,9 +220,14 @@ with col3:
 # ══════════════════════════════════════════════════════════════
 if st.session_state["show_workspaces"]:
 
-    workspaces  = get_all_workspaces()
-    system_ws   = [w for w in workspaces if w["workspace_type"] == "system"]
-    custom_ws   = [w for w in workspaces if w["workspace_type"] == "custom"]
+    ws_resp    = api_client.get_all_workspaces()
+    workspaces = ws_resp.get("workspaces", []) if "error" not in ws_resp else []
+
+    if "error" in ws_resp:
+        st.error(f"⚠️ Could not load workspaces: {ws_resp['error']}")
+
+    system_ws = [w for w in workspaces if w["workspace_type"] == "system"]
+    custom_ws = [w for w in workspaces if w["workspace_type"] == "custom"]
 
     st.markdown("<div class='ws-panel'>", unsafe_allow_html=True)
 
@@ -332,10 +326,13 @@ if st.session_state["show_workspaces"]:
                     st.rerun()
             with c2:
                 if st.button("🗑", key=f"del_{ws['name']}"):
-                    delete_workspace(ws["name"])
-                    if st.session_state["selected_workspace"] == ws["name"]:
-                        st.session_state["selected_workspace"] = None
-                    st.rerun()
+                    del_res = api_client.delete_workspace(ws["name"])
+                    if "error" in del_res:
+                        st.error(del_res["error"])
+                    else:
+                        if st.session_state["selected_workspace"] == ws["name"]:
+                            st.session_state["selected_workspace"] = None
+                        st.rerun()
     else:
         st.markdown(
             "<p style='color:#555; font-size:13px'>No custom workspaces yet.</p>",
@@ -353,19 +350,8 @@ if st.session_state["show_workspaces"]:
             new_name = st.text_input("Name")
             new_desc = st.text_area("Description", height=70)
 
-            try:
-                conn = psycopg2.connect(**get_db_config())
-                cur  = conn.cursor()
-                cur.execute("""
-                    SELECT schema_name || '.' || table_name
-                    FROM metadata.table_registry
-                    ORDER BY schema_name, table_name
-                """)
-                all_tables = [r[0] for r in cur.fetchall()]
-                cur.close()
-                conn.close()
-            except Exception:
-                all_tables = []
+            tables_resp = api_client.list_all_tables()
+            all_tables  = [t["full_name"] for t in tables_resp.get("tables", [])] if "error" not in tables_resp else []
 
             sel_tables = st.multiselect("Tables", options=all_tables)
 
@@ -373,12 +359,14 @@ if st.session_state["show_workspaces"]:
                 if not new_name or not sel_tables:
                     st.error("Name and at least one table required.")
                 else:
-                    res = create_custom_workspace(
+                    res = api_client.create_workspace(
                         name=new_name,
                         description=new_desc,
                         tables=sel_tables,
                     )
-                    if res:
+                    if "error" in res:
+                        st.error(f"⚠️ {res['error']}")
+                    else:
                         st.success(f"'{new_name}' created.")
                         st.session_state["show_create_form"] = False
                         st.rerun()
@@ -426,23 +414,18 @@ else:
                 st.session_state["question"] = question.strip()
 
                 with st.spinner("Finding relevant tables..."):
-                    from agents.table_agent import suggest_tables
+                    result = api_client.suggest_tables(
+                        question=question.strip(),
+                        workspace_name=st.session_state["selected_workspace"],
+                    )
 
-                    ws_name = st.session_state["selected_workspace"]
-
-                    if ws_name:
-                        ws     = get_workspace_by_name(ws_name)
-                        tables = suggest_tables(
-                            question, ws["db_config"],
-                            allowed_tables=ws["tables"]
-                        )
-                        if not tables:
-                            tables = ws["tables"]
-                    else:
-                        tables = suggest_tables(question, get_db_config())
-
-                    st.session_state["suggested_tables"] = tables
-                    st.session_state["step"]             = "tables"
+                if result.get("error"):
+                    st.error(f"⚠️ {result['error']}")
+                else:
+                    st.session_state["suggested_tables"]  = result.get("suggested_tables", [])
+                    st.session_state["enhanced_question"] = result.get("enhanced_question", question.strip())
+                    st.session_state["intent"]            = result.get("intent", "")
+                    st.session_state["step"]              = "tables"
                     st.rerun()
 
 
@@ -485,30 +468,13 @@ else:
 
         st.markdown("</div>", unsafe_allow_html=True)
 
-        ws_name = st.session_state["selected_workspace"]
-        if ws_name:
-            ws        = get_workspace_by_name(ws_name)
-            remaining = [
-                t for t in ws["tables"]
-                if t not in st.session_state["suggested_tables"]
-            ] if ws else []
+        # ── Add more tables dropdown ──────────────────────────
+        tables_resp = api_client.list_all_tables()
+        if "error" not in tables_resp:
+            all_table_names = [t["full_name"] for t in tables_resp.get("tables", [])]
+            remaining = [t for t in all_table_names if t not in st.session_state["suggested_tables"]]
         else:
-            try:
-                conn = psycopg2.connect(**get_db_config())
-                cur  = conn.cursor()
-                cur.execute("""
-                    SELECT schema_name || '.' || table_name
-                    FROM metadata.table_registry
-                    ORDER BY schema_name, table_name
-                """)
-                remaining = [
-                    r[0] for r in cur.fetchall()
-                    if r[0] not in st.session_state["suggested_tables"]
-                ]
-                cur.close()
-                conn.close()
-            except Exception:
-                remaining = []
+            remaining = []
 
         if remaining:
             extra = st.multiselect(
@@ -549,55 +515,29 @@ else:
         )
 
         if st.session_state["pipeline_result"] is None:
-            with st.spinner("Generating SQL..."):
-                ws_name = st.session_state["selected_workspace"]
+            with st.spinner("Generating SQL... this may take up to 30 seconds"):
+                result = api_client.generate_sql(
+                    question=st.session_state["question"],
+                    confirmed_tables=st.session_state["suggested_tables"],
+                    workspace_name=st.session_state["selected_workspace"],
+                )
 
-                if ws_name:
-                    result = run_pipeline(
-                        question=st.session_state["question"],
-                        workspace_name=ws_name,
-                    )
-                else:
-                    from agents.prompt_enhancer     import enhance_question
-                    from agents.intent_agent        import classify_intent_hybrid
-                    from agents.column_prune_agent  import prune_columns, format_pruned_schema_for_prompt
-                    from agents.sql_generator_agent import generate_sql
-                    from agents.validation_agent    import validate_and_fix
-                    from agents.explanation_agent   import explain_query
-                    from rag.rag_pipeline           import get_relevant_samples, format_examples_for_prompt
-                    import time
+            if result.get("error"):
+                st.error(f"⚠️ {result['error']}")
+                c1, c2 = st.columns(2)
+                with c1:
+                    if st.button("← Back to Tables"):
+                        st.session_state["step"] = "tables"
+                        st.rerun()
+                with c2:
+                    if st.button("🔄 New Question"):
+                        st.session_state["step"]            = "question"
+                        st.session_state["pipeline_result"] = None
+                        st.session_state["suggested_tables"] = []
+                        st.rerun()
+                st.stop()
 
-                    start      = time.time()
-                    db_config  = get_db_config()
-                    question   = st.session_state["question"]
-                    tables     = st.session_state["suggested_tables"]
-
-                    enhanced   = enhance_question(question)
-                    intent     = classify_intent_hybrid(enhanced, db_config)
-                    domain     = None if intent == "general" else intent
-                    pruned     = prune_columns(enhanced, tables, db_config)
-                    schema_str = format_pruned_schema_for_prompt(pruned)
-                    samples    = get_relevant_samples(enhanced, db_config, domain=domain, top_k=3)
-                    rag_str    = format_examples_for_prompt(samples)
-                    sql        = generate_sql(enhanced, schema_str, rag_str)
-                    val        = validate_and_fix(sql, schema_str, enhanced, db_config)
-                    sql        = val["sql"]
-                    explanation = explain_query(enhanced, sql)
-
-                    result = {
-                        "question":          question,
-                        "enhanced_question": enhanced,
-                        "intent":            intent,
-                        "tables":            tables,
-                        "sql":               sql,
-                        "validated":         val["valid"],
-                        "validation_issues": val["issues"],
-                        "explanation":       explanation,
-                        "latency_ms":        round((time.time() - start) * 1000, 2),
-                        "error":             None
-                    }
-
-                st.session_state["pipeline_result"] = result
+            st.session_state["pipeline_result"] = result
 
         result = st.session_state["pipeline_result"]
 
@@ -616,14 +556,14 @@ else:
                 """, unsafe_allow_html=True)
 
             # ── Meta tags ──────────────────────────────────────
-            validated       = result.get("validated", False)
-            issues          = result.get("validation_issues", [])
-            latency         = result.get("latency_ms", 0)
-            fixed           = len(issues) > 0 and validated
+            validated = result.get("validated", False)
+            issues    = result.get("validation_issues", [])
+            latency   = result.get("latency_ms", 0)
+            fixed     = len(issues) > 0 and validated
 
-            valid_class  = "meta-valid"   if validated else "meta-invalid"
-            valid_label  = "✓ Valid"      if validated else "✗ Invalid"
-            fixed_tag    = "<span class='meta-tag meta-fixed'>🔧 Auto-fixed</span>" if fixed else ""
+            valid_class = "meta-valid"   if validated else "meta-invalid"
+            valid_label = "✓ Valid"      if validated else "✗ Invalid"
+            fixed_tag   = "<span class='meta-tag meta-fixed'>🔧 Auto-fixed</span>" if fixed else ""
 
             st.markdown(f"""
                 <div style='margin-bottom:10px;'>

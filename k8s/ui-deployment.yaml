@@ -1,0 +1,19 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: sqlgpt-ui
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: sqlgpt-ui
+  template:
+    metadata:
+      labels:
+        app: sqlgpt-ui
+    spec:
+      containers:
+        - name: sqlgpt-ui
+          image: 566057504384.dkr.ecr.ap-south-2.amazonaws.com/sqlgpt-ui:latest
+          ports:
+            - containerPort: 8501

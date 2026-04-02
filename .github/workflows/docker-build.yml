@@ -1,4 +1,4 @@
-name: CI/CD Deploy to EKS
+name: CI/CD to EKS
 
 on:
   push:
@@ -9,19 +9,17 @@ env:
   AWS_REGION: ${{ secrets.AWS_REGION }}
   AWS_ACCOUNT_ID: ${{ secrets.AWS_ACCOUNT_ID }}
   EKS_CLUSTER: ${{ secrets.EKS_CLUSTER }}
-  IMAGE: ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com/sqlgpt-api
-  DEPLOYMENT_NAME: sqlgpt-api
+  
+  IMAGE_API: ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com/sqlgpt-api
+  IMAGE_UI: ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com/sqlgpt-ui
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
 
     steps:
-      # 1. Checkout
-      - name: Checkout code
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      # 2. AWS login
       - name: Configure AWS
         uses: aws-actions/configure-aws-credentials@v4
         with:
@@ -29,35 +27,36 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ secrets.AWS_REGION }}
 
-      # 3. Login to ECR
       - name: Login to ECR
         run: |
           aws ecr get-login-password --region $AWS_REGION \
-          | docker login --username AWS --password-stdin $IMAGE
+          | docker login --username AWS --password-stdin \
+          $AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com
 
-      # 4. Build + Push (clean)
-      - name: Build and Push
+      # API
+      - name: Build & Push API
         run: |
-          docker build -t $IMAGE:$GITHUB_SHA .
-          docker push $IMAGE:$GITHUB_SHA
+          docker build -t $IMAGE_API:$GITHUB_SHA -f Dockerfile.api .
+          docker push $IMAGE_API:$GITHUB_SHA
 
-      # 5. Connect to EKS
+      # UI
+      - name: Build & Push UI
+        run: |
+          docker build -t $IMAGE_UI:$GITHUB_SHA -f Dockerfile.ui .
+          docker push $IMAGE_UI:$GITHUB_SHA
+
       - name: Connect to EKS
         run: |
           aws eks update-kubeconfig \
           --region $AWS_REGION \
           --name $EKS_CLUSTER
 
-      # 6. Deploy (BEST WAY)
-      - name: Deploy to Kubernetes
+      - name: Deploy
         run: |
-          kubectl apply -f k8s/deployment.yaml
-          kubectl apply -f k8s/service.yaml
+          kubectl apply -f k8s/
 
-          kubectl set image deployment/$DEPLOYMENT_NAME \
-          $DEPLOYMENT_NAME=$IMAGE:$GITHUB_SHA
+          kubectl set image deployment/sqlgpt-api \
+          sqlgpt-api=$IMAGE_API:$GITHUB_SHA
 
-          
-      - name: Debug Kubernetes
-        run: |
-          kubectl get svc
+          kubectl set image deployment/sqlgpt-ui \
+          sqlgpt-ui=$IMAGE_UI:$GITHUB_SHA
