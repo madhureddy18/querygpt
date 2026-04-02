@@ -1,0 +1,10 @@
+fastapi
+uvicorn[standard]
+pydantic
+psycopg2-binary
+pgvector
+sentence-transformers
+groq
+sqlglot
+python-dotenv
+streamlit
