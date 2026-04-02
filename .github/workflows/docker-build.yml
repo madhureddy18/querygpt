@@ -56,3 +56,8 @@ jobs:
 
           kubectl set image deployment/$DEPLOYMENT_NAME \
           $DEPLOYMENT_NAME=$IMAGE:$GITHUB_SHA
+
+          
+      - name: Debug Kubernetes
+        run: |
+          kubectl get svc
