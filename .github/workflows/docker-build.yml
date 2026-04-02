@@ -10,7 +10,7 @@ env:
   AWS_ACCOUNT_ID: ${{ secrets.AWS_ACCOUNT_ID }}
   EKS_CLUSTER: ${{ secrets.EKS_CLUSTER }}
   IMAGE: ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com/sqlgpt-api
-  DEPLOYMENT_NAME: "sqlgpt-api"
+  DEPLOYMENT_NAME: sqlgpt-api
 
 jobs:
   deploy:
@@ -51,5 +51,8 @@ jobs:
       # 6. Deploy (BEST WAY)
       - name: Deploy to Kubernetes
         run: |
+          kubectl apply -f k8s/deployment.yaml
+          kubectl apply -f k8s/service.yaml
+
           kubectl set image deployment/$DEPLOYMENT_NAME \
           $DEPLOYMENT_NAME=$IMAGE:$GITHUB_SHA
