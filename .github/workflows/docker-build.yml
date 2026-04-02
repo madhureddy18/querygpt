@@ -1,12 +1,19 @@
-name: Build and Push to ECR
+name: CI/CD Deploy to EKS
 
 on:
   push:
     branches:
       - main
 
+env:
+  AWS_REGION: ${{ secrets.AWS_REGION }}
+  AWS_ACCOUNT_ID: ${{ secrets.AWS_ACCOUNT_ID }}
+  EKS_CLUSTER: ${{ secrets.EKS_CLUSTER }}
+  IMAGE: ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com/sqlgpt-api
+  DEPLOYMENT_NAME: sqlgpt-api
+
 jobs:
-  build:
+  deploy:
     runs-on: ubuntu-latest
 
     steps:
@@ -14,8 +21,8 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      # 2. Configure AWS
-      - name: Configure AWS credentials
+      # 2. AWS login
+      - name: Configure AWS
         uses: aws-actions/configure-aws-credentials@v4
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
@@ -23,33 +30,26 @@ jobs:
           aws-region: ${{ secrets.AWS_REGION }}
 
       # 3. Login to ECR
-      - name: Login to Amazon ECR
-        env:
-          AWS_ACCOUNT_ID: ${{ secrets.AWS_ACCOUNT_ID }}
-          AWS_REGION: ${{ secrets.AWS_REGION }}
+      - name: Login to ECR
         run: |
           aws ecr get-login-password --region $AWS_REGION \
-          | docker login --username AWS --password-stdin \
-          $AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com
+          | docker login --username AWS --password-stdin $IMAGE
 
-      # 4. Build image
-      - name: Build Docker Image
-        run: docker build -t sqlgpt-api .
-
-      # 5. Tag image 
-      - name: Tag Image
-        env:
-          AWS_ACCOUNT_ID: ${{ secrets.AWS_ACCOUNT_ID }}
-          AWS_REGION: ${{ secrets.AWS_REGION }}
+      # 4. Build + Push (clean)
+      - name: Build and Push
         run: |
-          docker tag sqlgpt-api:latest \
-          $AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/sqlgpt-api:latest
+          docker build -t $IMAGE:$GITHUB_SHA .
+          docker push $IMAGE:$GITHUB_SHA
 
-      # 6. Push image 
-      - name: Push to ECR
-        env:
-          AWS_ACCOUNT_ID: ${{ secrets.AWS_ACCOUNT_ID }}
-          AWS_REGION: ${{ secrets.AWS_REGION }}
+      # 5. Connect to EKS
+      - name: Connect to EKS
         run: |
-          docker push \
-          $AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/sqlgpt-api:latest
+          aws eks update-kubeconfig \
+          --region $AWS_REGION \
+          --name $EKS_CLUSTER
+
+      # 6. Deploy (BEST WAY)
+      - name: Deploy to Kubernetes
+        run: |
+          kubectl set image deployment/$DEPLOYMENT_NAME \
+          $DEPLOYMENT_NAME=$IMAGE:$GITHUB_SHA
